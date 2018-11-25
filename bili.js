@@ -1,6 +1,9 @@
 const puppeteer = require('puppeteer')
 const Random = require('random-js')()
-const PNG = require('pngjs').PNG
+const {
+    getImageDataFromPng,
+    writeIntermediateFile,
+} = require('./util')
 
 function randomXYfromCenter(xLeft, yTop, width, height) {
     return [
@@ -9,20 +12,11 @@ function randomXYfromCenter(xLeft, yTop, width, height) {
     ]
 }
 
-function getPngPixels(pngBuffer) {
-    const png = PNG.sync.read(pngBuffer)
-    return {
-        depth: 4,
-        order: 'rgba',
-        width: png.width,
-        height: png.height,
-        data: Uint8ClampedArray.from(png.data)
-    }
-}
-
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
-async function tryCrack(page, seq = 0) {
+const WRITE_INTERMEDIATES = Boolean(process.env['DEBUG'])
+
+async function tryCrackBilibili(page, seq = 0) {
     const fileSuffix = String(seq).padStart(3, '0')
 
     await page.waitForSelector('.gt_slider_knob')
@@ -40,17 +34,17 @@ async function tryCrack(page, seq = 0) {
     const captchaRect = await captchaWrap.boundingBox()
 
     const imageBefore = await page.screenshot({ type: 'png', encoding: 'binary', clip: captchaRect })
-    const pixelsBefore = getPngPixels(imageBefore)
+    const pixelsBefore = getImageDataFromPng(imageBefore)
 
-    require('fs').writeFileSync(`data/source-${fileSuffix}.png`, imageBefore)
+    WRITE_INTERMEDIATES && writeIntermediateFile(`source-${fileSuffix}.png`, imageBefore)
 
     await page.mouse.down()
     await sleep(1000)
 
     const imageAfter = await page.screenshot({ type: 'png', encoding: 'binary', clip: captchaRect })
-    const pixelsAfter = getPngPixels(imageAfter)
+    const pixelsAfter = getImageDataFromPng(imageAfter)
 
-    require('fs').writeFileSync(`data/first-delta-${fileSuffix}.png`, imageAfter)
+    WRITE_INTERMEDIATES && writeIntermediateFile(`first-delta-${fileSuffix}.png`, imageAfter)
 
     // get xOffset, the amount of horizontal pixels to move
     const xOffset = require('./locate2')(pixelsBefore, pixelsAfter)
@@ -71,10 +65,14 @@ async function tryCrack(page, seq = 0) {
     return page.waitForSelector('.gt_info_tip.gt_success', { timeout: 10000 }).then(_ => true, _ => false)
 }
 
-async function crackBilibili() {
+async function testBilibili() {
     const browser = await puppeteer.launch({ headless: true })
 
     for (let i = 0; i !== 50; ++i) {
+        if (WRITE_INTERMEDIATES) {
+            process.env['__SEQ'] = i
+        }
+
         const page = await browser.newPage()
         await page.setViewport({
             width: 1270,
@@ -82,7 +80,7 @@ async function crackBilibili() {
         })
         await page.goto('https://passport.bilibili.com/login')
 
-        const result = await tryCrack(page, i)
+        const result = await tryCrackBilibili(page, i)
         console.log(result ? 1 : 0)
 
         await page.close()
@@ -93,4 +91,5 @@ async function crackBilibili() {
     await browser.close()
 }
 
-module.exports = crackBilibili
+module.exports = tryCrackBilibili
+module.exports.test = testBilibili
