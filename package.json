@@ -1,0 +1,14 @@
+{
+  "name": "gt-crack",
+  "version": "0.1.0",
+  "description": "Geetest auto crack",
+  "main": "index.js",
+  "author": "wacky6",
+  "license": "GPL-3.0",
+  "dependencies": {
+    "d3-ease": "^1.0.5",
+    "pngjs": "^3.3.3",
+    "puppeteer": "^1.10.0",
+    "random-js": "^1.0.8"
+  }
+}
